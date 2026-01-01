@@ -1,8 +1,4 @@
-<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
 
-# give me in md downloadable format
-
-You can make the README directly downloadable by saving the Markdown content into a file named `README.md`. Below is the **exact file content**; copy–paste it into `README.md` in your project root, and it will be a normal downloadable Markdown file in any Git client or file browser. The text itself is standard Markdown.
 
 ```markdown
 # Real Map Shortest Path (Delhi / NCR)
@@ -157,4 +153,5 @@ GET /route?orig_lat=<lat1>\&orig_lon=<lon1>\&dest_lat=<lat2>\&dest_lon=<lon2>
 - If you click outside the bounding box or on isolated areas, the API returns **404 – No route found between these points**.  
 - This demo uses static OpenStreetMap data only: no live traffic or advanced constraints beyond what OSM encodes.[web:41]
 ```
+
 
