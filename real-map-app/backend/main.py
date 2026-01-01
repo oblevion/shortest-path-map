@@ -1,92 +1,180 @@
-from typing import Dict, Any, List
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-import osmnx as ox
-import networkx as nx
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Delhi Shortest Path</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-PLACE_NAME = "Delhi, India"  # whole Delhi[web:196][web:204]
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
 
-# ---------- load real road graph ----------
+  <style>
+    html, body, #map {
+      height: 100%;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
 
-print(f"Loading graph for {PLACE_NAME} ...")
-# Download drivable street network for Delhi[web:41][web:201]
-G = ox.graph_from_place(PLACE_NAME, network_type="drive")
+    body {
+      font-family: sans-serif;
+    }
 
-# Keep only largest connected component to avoid unreachable pairs[web:41][web:107]
-G = ox.truncate.largest_component(G, strongly=False)
+    #infoBox {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 10px 12px;
+      border-radius: 6px;
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.3);
+      max-width: 280px;
+    }
 
-# Add edge lengths in meters for routing[web:41]
-G = ox.distance.add_edge_lengths(G)
+    #status {
+      margin-top: 6px;
+      font-size: 13px;
+    }
 
-app = FastAPI()
+    button {
+      margin-top: 8px;
+      width: 100%;
+      padding: 6px 0;
+      border: none;
+      background-color: #007bff;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
 
-# Allow frontend on another port to call the API
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # relax for dev
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div id="infoBox">
+    <div><strong>Delhi Shortest Path</strong></div>
+    <div>Click once for origin and once for destination.</div>
+    <div id="status">Click on the map to set origin.</div>
+    <button id="resetBtn">Reset points</button>
+  </div>
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "place": PLACE_NAME}
+  <div id="map"></div>
 
-def shortest_path_coords(
-    orig_lat: float, orig_lon: float,
-    dest_lat: float, dest_lon: float,
-) -> Dict[str, Any]:
-    """
-    Compute shortest path between two coordinates on the OSM graph.
-    Returns {'coords': [(lat, lon), ...], 'length_m': float}.
-    If no path exists, returns {'coords': [], 'length_m': 0.0}. [web:38][web:41]
-    """
-    # Find nearest graph nodes to given coordinates[web:38][web:41]
-    orig_node = ox.distance.nearest_nodes(G, X=orig_lon, Y=orig_lat)
-    dest_node = ox.distance.nearest_nodes(G, X=dest_lon, Y=dest_lat)
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    try:
-        # Shortest path by edge length (meters)[web:38][web:107]
-        route_nodes: List[int] = ox.routing.shortest_path(
-            G, orig_node, dest_node, weight="length"
-        )
-    except nx.NetworkXNoPath:
-        # No path between these nodes
-        return {"coords": [], "length_m": 0.0}
+  <script>
+    const API_BASE = "http://127.0.0.1:8000";
 
-    if not route_nodes:
-        return {"coords": [], "length_m": 0.0}
+    let map;
+    let originMarker = null;
+    let destMarker = null;
+    let routeLine = null;
+    let origin = null;
+    let dest = null;
+    let isFetching = false;
 
-    # Coordinates for each node along the route
-    coords = [
-        (G.nodes[n]["y"], G.nodes[n]["x"])  # (lat, lon)[web:41]
-        for n in route_nodes
-    ]
+    function initMap() {
+      map = L.map("map").setView([28.6139, 77.2090], 12);
 
-    # Total length in meters
-    total_length = 0.0
-    for u, v in zip(route_nodes[:-1], route_nodes[1:]):
-        edge_data = list(G.get_edge_data(u, v).values())[0]
-        total_length += edge_data.get("length", 0.0)  # [web:166][web:168]
+      // Use Carto Light tiles for better reliability
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+        subdomains: "abcd",
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      }).addTo(map);
 
-    return {"coords": coords, "length_m": total_length}
+      map.on("click", onMapClick);
 
-@app.get("/route")
-def route(
-    orig_lat: float,
-    orig_lon: float,
-    dest_lat: float,
-    dest_lon: float,
-):
-    """
-    GET /route?orig_lat=...&orig_lon=...&dest_lat=...&dest_lon=...
-    """
-    result = shortest_path_coords(orig_lat, orig_lon, dest_lat, dest_lon)
-    if not result["coords"]:
-        raise HTTPException(
-            status_code=404,
-            detail="No route found between these points",
-        )
-    return result
+      // Fix map tiles after window load
+      window.addEventListener("load", () => {
+        map.invalidateSize(true);
+      });
+    }
+
+    function addMarker(lat, lng, label) {
+      return L.marker([lat, lng]).addTo(map).bindPopup(label).openPopup();
+    }
+
+    function onMapClick(e) {
+      const { lat, lng } = e.latlng;
+      const status = document.getElementById("status");
+
+      if (isFetching) {
+        status.textContent = "Fetching route... please wait.";
+        return;
+      }
+
+      if (!origin) {
+        origin = { lat, lng };
+        if (originMarker) map.removeLayer(originMarker);
+        originMarker = addMarker(lat, lng, "Origin");
+        status.textContent = `Origin: ${lat.toFixed(5)}, ${lng.toFixed(5)}. Now click destination.`;
+      } else if (!dest) {
+        dest = { lat, lng };
+        if (destMarker) map.removeLayer(destMarker);
+        destMarker = addMarker(lat, lng, "Destination");
+        status.textContent = `Destination: ${lat.toFixed(5)}, ${lng.toFixed(5)}. Fetching route...`;
+        fetchRoute();
+      } else {
+        status.textContent = "Both points are set. Click Reset to choose again.";
+      }
+    }
+
+    async function fetchRoute() {
+      if (!origin || !dest) return;
+      isFetching = true;
+      const status = document.getElementById("status");
+
+      try {
+        const url = `${API_BASE}/route?orig_lat=${origin.lat}&orig_lon=${origin.lng}&dest_lat=${dest.lat}&dest_lon=${dest.lng}`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || "Route fetch error");
+        }
+
+        const data = await res.json();
+        const coords = data.coords;
+        const lengthM = data.length_m;
+
+        if (!coords || coords.length === 0) {
+          status.textContent = "No route found. Resetting in 3 seconds...";
+          setTimeout(resetPoints, 3000);
+          return;
+        }
+
+        if (routeLine) map.removeLayer(routeLine);
+
+        const latlngs = coords.map(c => [c[0], c[1]]);
+        routeLine = L.polyline(latlngs, { color: "blue", weight: 5 }).addTo(map);
+        map.fitBounds(routeLine.getBounds());
+
+        status.textContent = `Route length: ${(lengthM / 1000).toFixed(2)} km. Click Reset to try another pair.`;
+      } catch (e) {
+        status.textContent = "Error: " + e.message;
+      } finally {
+        isFetching = false;
+      }
+    }
+
+    function resetPoints() {
+      origin = null;
+      dest = null;
+      if (originMarker) map.removeLayer(originMarker);
+      if (destMarker) map.removeLayer(destMarker);
+      if (routeLine) map.removeLayer(routeLine);
+      originMarker = destMarker = routeLine = null;
+      document.getElementById("status").textContent = "Click on the map to set origin.";
+    }
+
+    document.getElementById("resetBtn").addEventListener("click", resetPoints);
+
+    initMap();
+  </script>
+</body>
+</html>
