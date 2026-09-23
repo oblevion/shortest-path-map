@@ -1,23 +1,57 @@
 
 
 ```markdown
-# Real Map Shortest Path (Delhi / NCR)
+<div align="center">
 
-This project is a minimal web app that finds the **shortest driving route on a real map** using OpenStreetMap data. It uses:
+# Delhi / NCR Route Optimizer
 
-- OSMnx + NetworkX for routing on a real road graph[web:41]  
-- FastAPI as the backend API[web:25]  
-- Leaflet as the interactive frontend map UI[web:29]
+A lightweight web application for calculating and visualizing the shortest driving route on a real-world road graph using OpenStreetMap data.
+
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![OSMnx](https://img.shields.io/badge/Routing-OSMnx-blue?style=flat-square)](https://osmnx.readthedocs.io/)
+[![NetworkX](https://img.shields.io/badge/Graph-NetworkX-orange?style=flat-square)](https://networkx.org/)
+[![Leaflet](https://img.shields.io/badge/Frontend-Leaflet-199900?style=flat-square&logo=leaflet&logoColor=white)](https://leafletjs.com/)
+[![OpenStreetMap](https://img.shields.io/badge/Data-OpenStreetMap-7EBC6F?style=flat-square&logo=openstreetmap&logoColor=white)](https://www.openstreetmap.org/)
+
+</div>
 
 ---
 
-## Features
+## Overview
 
-- Real road network for **Delhi / NCR region** loaded from OpenStreetMap[web:41][web:204]  
-- Shortest path between two arbitrary points (click origin and destination on the map)[web:38]  
-- Returns and displays:
-  - The route as a blue polyline on the map  
-  - Total distance in kilometers in the info box
+This project implements an interactive routing engine for the **Delhi / NCR** region. It models real-world road topology sourced from OpenStreetMap, processes routing queries asynchronously via a FastAPI backend, and renders optimal paths on a Leaflet-powered interface.
+
+---
+
+## Key Features
+
+* **Real-World Topology:** Constructs a drivable street network graph directly from OpenStreetMap data for Delhi and the National Capital Region (NCR).
+* **Interactive Coordinate Selection:** Allows users to define arbitrary origin and destination waypoints directly via map clicks.
+* **Shortest Path Computation:** Calculates the optimal driving path over the network graph using graph traversal algorithms via NetworkX.
+* **Visual Route Rendering:** Plots the generated route dynamically as a highlighted polyline on the interactive map canvas.
+* **Live Route Telemetry:** Displays total driving distance in kilometers in a dedicated interface information panel.
+
+---
+
+## Tech Stack
+
+| Component | Technology | Description |
+| :--- | :--- | :--- |
+| **Routing Engine** | [OSMnx](https://osmnx.readthedocs.io/) | Retrieves, models, and analyzes street networks from OpenStreetMap |
+| **Graph Processing** | [NetworkX](https://networkx.org/) | Computes shortest paths across topological road graphs |
+| **Backend API** | [FastAPI](https://fastapi.tiangolo.com/) | Exposes asynchronous REST endpoints for routing queries |
+| **Frontend Map UI** | [Leaflet.js](https://leafletjs.com/) | Provides the interactive map canvas, marker events, and polyline rendering |
+| **Map Data** | [OpenStreetMap](https://www.openstreetmap.org/) | Geospatial vector data providing road network attributes |
+
+---
+
+## Workflow
+
+1. **Graph Construction:** The backend downloads and caches the drivable road network graph for Delhi / NCR using OSMnx.
+2. **Point Selection:** The user clicks origin and destination locations on the Leaflet map, transmitting GPS coordinates to the API.
+3. **Node Snapping & Routing:** The backend matches coordinates to the nearest network nodes and traverses the graph with NetworkX to find the shortest path.
+4. **Payload Delivery:** The API returns the polyline coordinates and the total calculated distance in kilometers.
+5. **Map Visualization:** Leaflet renders the path and updates the telemetry panel.
 
 ---
 
